@@ -7,7 +7,8 @@ import org.apache.flink.api.common.eventtime.WatermarkStrategy
 import tyol.common.SensorDomain
 import org.apache.flink.api.common.eventtime.TimestampAssignerSupplier
 import org.apache.flink.api.common.functions.{MapFunction, RichMapFunction}
-import org.apache.flink.api.common.state.{ValueState, ValueStateDescriptor}
+import org.apache.flink.api.common.state.{StateTtlConfig, ValueState, ValueStateDescriptor}
+import org.apache.flink.api.common.time.Time
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.configuration.Configuration
 import org.apache.flink.streaming.api.TimeCharacteristic
@@ -35,7 +36,7 @@ object HelloFlink {
         }
       })
 
-    val sensorData = env
+    val sensorData: DataStream[SensorDomain.SensorReading] = env
       .addSource(new SensorDomain.SensorSource)
       .assignTimestampsAndWatermarks(wms)
 
@@ -59,29 +60,41 @@ object HelloFlink {
 
      */
 
-    sensorData
+    val keyed: KeyedStream[SensorDomain.SensorReading, String] = sensorData
       .keyBy(_.id)
-      .map(new RichMapFunction[SensorDomain.SensorReading, (String, Long)] {
-        private var sum: ValueState[(String, Long)] = _
 
-        override def map(value: SensorDomain.SensorReading): (String, Long) = {
-          val (id, count) = sum.value()
+    keyed
+      .map(new RichMapFunction[SensorDomain.SensorReading, (String, Double)] {
+        private var sum: ValueState[(String, Long, Long)] = _
 
-          val current = (value.id, count + 1)
+        override def map(value: SensorDomain.SensorReading): (String, Double) = {
+          val sumState = sum.value()
+
+          val current =
+            if (sumState == null) (value.id, 1L, value.temperature.toLong)
+            else (value.id, sumState._2 + 1L, sumState._3 + value.temperature.toLong)
           sum.update(current)
-          current
+          (current._1, current._3 / current._2.toDouble)
         }
 
         override def open(parameters: Configuration): Unit = {
-          val descriprtor = new ValueStateDescriptor[(String, Long)](
+          val descriptor = new ValueStateDescriptor[(String, Long, Long)](
             "sum",
-            classOf[(String, Long)],
-            ("", 0L)
+            classOf[(String, Long, Long)]
           )
-          sum = getRuntimeContext.getState(descriprtor)
+          descriptor.enableTimeToLive(
+            StateTtlConfig
+              .newBuilder(Time.days(1))
+              .setUpdateType(StateTtlConfig.UpdateType.OnCreateAndWrite)
+              .setStateVisibility(StateTtlConfig.StateVisibility.NeverReturnExpired)
+              .build()
+          )
+          sum = getRuntimeContext.getState(descriptor)
         }
-      }).print()
+      })
+      .print()
 
+    //println(env.getExecutionPlan)
     env.execute("Hello Flink")
   }
 }
