@@ -6,4 +6,6 @@ object Dependencies {
   lazy val flinkTableScala = "org.apache.flink" %% "flink-table-api-scala-bridge" % flinkVersion
   lazy val flinkClients = "org.apache.flink" % "flink-clients" % flinkVersion
   lazy val flinkRuntimeWeb = "org.apache.flink" % "flink-runtime-web" % flinkVersion
+
+  
 }
