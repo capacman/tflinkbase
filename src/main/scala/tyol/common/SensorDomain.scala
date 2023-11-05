@@ -23,7 +23,7 @@ object SensorDomain {
       val taskIdx = this.getRuntimeContext.getIndexOfThisSubtask
 
       // initialize sensor ids and temperatures
-      val maxSensorPerTask = 2
+      val maxSensorPerTask = 20
       var curFTemp = (1 to maxSensorPerTask).map { i =>
         (s"sensor_${location}_" + (taskIdx * maxSensorPerTask + i), 65 + (rand.nextGaussian() * 20))
       }
@@ -40,7 +40,7 @@ object SensorDomain {
       while (running) {
 
         // update temperature
-        curFTemp = curFTemp.map(t => (t._1, t._2 + (rand.nextGaussian() * 0.5)))
+        curFTemp = curFTemp.map(t => (t._1, t._2 + (rand.nextGaussian() * 20)))
         // get current time
         val curTime = Calendar.getInstance.getTimeInMillis
 
@@ -54,7 +54,7 @@ object SensorDomain {
         )
 
         // wait for 100 ms
-        Thread.sleep(100)
+        Thread.sleep(1000)
       }
 
     }

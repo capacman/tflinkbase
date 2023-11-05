@@ -8,12 +8,19 @@ import tyol.common.SensorDomain
 import org.apache.flink.api.common.eventtime.TimestampAssignerSupplier
 import org.apache.flink.api.common.functions.{MapFunction, RichMapFunction}
 import org.apache.flink.api.common.state.{StateTtlConfig, ValueState, ValueStateDescriptor}
+import org.apache.flink.streaming.api.windowing.time.{Time => WindowTime}
 import org.apache.flink.api.common.time.Time
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.configuration.Configuration
 import org.apache.flink.streaming.api.TimeCharacteristic
 import org.apache.flink.streaming.api.functions.sink.SinkFunction
+import org.apache.flink.streaming.api.scala.function.ProcessWindowFunction
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows
+import org.apache.flink.streaming.api.windowing.windows.{TimeWindow, Window}
+import org.apache.flink.table.api.Tumble
 import org.apache.flink.util.Collector
+
+import java.lang
 
 object HelloFlink {
 
@@ -21,7 +28,7 @@ object HelloFlink {
     val env = StreamExecutionEnvironment
       .createLocalEnvironmentWithWebUI() // TODO remove in production
       .setRuntimeMode(RuntimeExecutionMode.STREAMING)
-    env.setParallelism(1)
+    env.setParallelism(2)
 
     // val stream: DataStream[String] = env.fromElements("Hello", "Flink", "World")
 
@@ -59,7 +66,7 @@ object HelloFlink {
     source id=2 --------> myproc2
 
      */
-
+    /*
     val keyed: KeyedStream[SensorDomain.SensorReading, String] = sensorData
       .keyBy(_.id)
 
@@ -93,8 +100,34 @@ object HelloFlink {
         }
       })
       .print()
+     */
 
-    //println(env.getExecutionPlan)
+    val windowProcessFunction = new ProcessWindowFunction[SensorDomain.SensorReading, (String, Double, Long), String, TimeWindow] {
+
+      override def process(
+          key: String,
+          context: Context,
+          elements: Iterable[SensorDomain.SensorReading],
+          out: Collector[(String, Double, Long)]
+      ): Unit = {
+        elements
+          .reduceOption((l, r) => if (l.temperature > r.temperature) l else r)
+          .foreach { maxSensorReading =>
+            val outToCollect = (key, maxSensorReading.temperature, context.window.getEnd)
+            out.collect(outToCollect)
+          }
+      }
+    }
+    sensorData
+      .keyBy(_.id)
+      .window(TumblingEventTimeWindows.of(WindowTime.seconds(60)))
+      .process(windowProcessFunction)
+      .windowAll(TumblingEventTimeWindows.of(WindowTime.seconds(60)))
+      .maxBy(1)
+      .print()
+
+     //println(env.getExecutionPlan)
     env.execute("Hello Flink")
+
   }
 }
