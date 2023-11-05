@@ -39,10 +39,10 @@ object HelloFlink {
       .addSource(new SensorDomain.SensorSource)
       .assignTimestampsAndWatermarks(wms)
 
-    sensorData.filter(_.temperature>30).addSink(new SinkFunction[SensorDomain.SensorReading] {
+    /*sensorData.filter(_.temperature>30).addSink(new SinkFunction[SensorDomain.SensorReading] {
       override def invoke(value: SensorDomain.SensorReading, context: SinkFunction.Context): Unit = println(s"simplesinkbigger30: $value")
     }).name(">30")
-/*
+
     sensorData.filter(_.temperature < 30).addSink(new SinkFunction[SensorDomain.SensorReading] {
       override def invoke(value: SensorDomain.SensorReading, context: SinkFunction.Context): Unit = println(s"simplesinkless30: $value")
     }).name("<30")*/
@@ -80,7 +80,7 @@ object HelloFlink {
           )
           sum = getRuntimeContext.getState(descriprtor)
         }
-      })
+      }).print()
 
     env.execute("Hello Flink")
   }
